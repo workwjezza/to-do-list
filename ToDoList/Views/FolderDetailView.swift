@@ -101,7 +101,7 @@ struct FolderDetailView: View {
             }
             .background(Color.white)
         }
-        .frame(width: 500, height: 600)
+        .frame(minWidth: 400, idealWidth: 500, minHeight: 400, idealHeight: 600)
         .background(Color.white)
         .sheet(isPresented: $showingNewNoteSheet) {
             newNoteSheet
@@ -437,9 +437,12 @@ struct MediaThumbnail: View {
             defer: false
         )
         
-        window.title = mediaItem.originalFileName ?? "Image"
+        window.title = "Image Gallery"
         window.center()
-        window.contentView = NSHostingView(rootView: MediaViewerWindow(mediaItem: mediaItem))
+        window.contentView = NSHostingView(
+            rootView: MediaViewerWindow(folder: folder, initialMediaItem: mediaItem)
+                .environmentObject(DataManager.shared)
+        )
         window.makeKeyAndOrderFront(nil)
         window.isReleasedWhenClosed = false
     }
@@ -448,24 +451,92 @@ struct MediaThumbnail: View {
 // MARK: - Media Viewer Window
 
 struct MediaViewerWindow: View {
-    let mediaItem: MediaItem
+    @EnvironmentObject var dataManager: DataManager
+    let folder: DailyFolder
+    let initialMediaItem: MediaItem
     @Environment(\.dismiss) private var dismiss
+    @State private var currentIndex: Int = 0
+    
+    private var currentFolder: DailyFolder {
+        dataManager.dailyFolders.first(where: { $0.id == folder.id }) ?? folder
+    }
+    
+    private var mediaItems: [MediaItem] {
+        currentFolder.mediaItems
+    }
+    
+    private var currentMediaItem: MediaItem? {
+        guard currentIndex >= 0 && currentIndex < mediaItems.count else { return nil }
+        return mediaItems[currentIndex]
+    }
     
     var body: some View {
         ZStack {
             Color.white.ignoresSafeArea()
             
-            if let image = mediaItem.image {
+            if let image = currentMediaItem?.image {
                 Image(nsImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             
-            // Close button
+            // Navigation buttons
+            HStack {
+                // Previous button
+                if currentIndex > 0 {
+                    Button(action: {
+                        withAnimation {
+                            currentIndex -= 1
+                        }
+                    }) {
+                        Image(systemName: "chevron.left.circle.fill")
+                            .font(.system(size: 40))
+                            .foregroundColor(.black.opacity(0.6))
+                            .background(Circle().fill(Color.white.opacity(0.8)))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.leading, 20)
+                    .help("Previous image (Left arrow)")
+                }
+                
+                Spacer()
+                
+                // Next button
+                if currentIndex < mediaItems.count - 1 {
+                    Button(action: {
+                        withAnimation {
+                            currentIndex += 1
+                        }
+                    }) {
+                        Image(systemName: "chevron.right.circle.fill")
+                            .font(.system(size: 40))
+                            .foregroundColor(.black.opacity(0.6))
+                            .background(Circle().fill(Color.white.opacity(0.8)))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.trailing, 20)
+                    .help("Next image (Right arrow)")
+                }
+            }
+            
+            // Close button and image counter
             VStack {
                 HStack {
+                    // Image counter
+                    if mediaItems.count > 1 {
+                        Text("\(currentIndex + 1) / \(mediaItems.count)")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.black.opacity(0.7))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.white.opacity(0.9))
+                            .cornerRadius(12)
+                            .padding(.leading, 20)
+                    }
+                    
                     Spacer()
+                    
                     Button(action: {
                         dismiss()
                     }) {
@@ -480,6 +551,34 @@ struct MediaViewerWindow: View {
             }
         }
         .frame(minWidth: 400, minHeight: 400)
+        .onAppear {
+            // Find the initial index
+            if let index = mediaItems.firstIndex(where: { $0.id == initialMediaItem.id }) {
+                currentIndex = index
+            }
+        }
+        .onKeyPress(.leftArrow) {
+            if currentIndex > 0 {
+                withAnimation {
+                    currentIndex -= 1
+                }
+                return .handled
+            }
+            return .ignored
+        }
+        .onKeyPress(.rightArrow) {
+            if currentIndex < mediaItems.count - 1 {
+                withAnimation {
+                    currentIndex += 1
+                }
+                return .handled
+            }
+            return .ignored
+        }
+        .onKeyPress(.escape) {
+            dismiss()
+            return .handled
+        }
     }
 }
 
