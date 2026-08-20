@@ -12,6 +12,7 @@ struct DailyFolder: Identifiable, Codable, Equatable {
     var name: String
     var date: Date
     var notes: [Note] = []
+    var mediaItems: [MediaItem] = []
     
     var displayName: String {
         let formatter = DateFormatter()
@@ -20,6 +21,6 @@ struct DailyFolder: Identifiable, Codable, Equatable {
     }
     
     enum CodingKeys: String, CodingKey {
-        case id, name, date, notes
+        case id, name, date, notes, mediaItems
     }
 }

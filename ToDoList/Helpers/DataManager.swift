@@ -87,6 +87,23 @@ class DataManager: ObservableObject {
         }
     }
     
+    // MARK: - Media Items
+    
+    func addMediaToFolder(_ folder: DailyFolder, imageData: Data, fileName: String?) {
+        if let index = dailyFolders.firstIndex(where: { $0.id == folder.id }) {
+            let newMedia = MediaItem(imageData: imageData, dateAdded: Date(), originalFileName: fileName)
+            dailyFolders[index].mediaItems.append(newMedia)
+            saveFolders()
+        }
+    }
+    
+    func deleteMediaFromFolder(_ folder: DailyFolder, media: MediaItem) {
+        if let folderIndex = dailyFolders.firstIndex(where: { $0.id == folder.id }) {
+            dailyFolders[folderIndex].mediaItems.removeAll { $0.id == media.id }
+            saveFolders()
+        }
+    }
+    
     // MARK: - History
     
     func clearToHistory() {

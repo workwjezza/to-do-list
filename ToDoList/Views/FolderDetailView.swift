@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct FolderDetailView: View {
     @EnvironmentObject var dataManager: DataManager
@@ -15,6 +16,7 @@ struct FolderDetailView: View {
     @State private var newNoteTitle = ""
     @State private var newNoteContent = ""
     @State private var showingNewNoteSheet = false
+    @State private var isDraggingOver = false
     
     var body: some View {
         VStack(spacing: 0) {
@@ -45,51 +47,58 @@ struct FolderDetailView: View {
             
             Divider()
             
-            // Notes list
+            // Scrollable content area with notes and media
             ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    if currentFolder.notes.isEmpty {
-                        VStack(spacing: 12) {
-                            Image(systemName: "note.text")
-                                .font(.system(size: 40))
-                                .foregroundColor(.black.opacity(0.2))
-                            
-                            Text("No notes yet")
-                                .font(.system(size: 14))
-                                .foregroundColor(.black.opacity(0.4))
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 60)
-                    } else {
-                        ForEach(currentFolder.notes) { note in
-                            NoteRow(folder: folder, note: note, onDoubleClick: {
-                                let noteId = NoteIdentifier(folderId: folder.id, noteId: note.id)
-                                openWindow(id: "note", value: noteId)
-                            })
+                VStack(alignment: .leading, spacing: 0) {
+                    // Notes section
+                    VStack(alignment: .leading, spacing: 12) {
+                        if currentFolder.notes.isEmpty {
+                            VStack(spacing: 12) {
+                                Image(systemName: "note.text")
+                                    .font(.system(size: 40))
+                                    .foregroundColor(.black.opacity(0.2))
+                                
+                                Text("No notes yet")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.black.opacity(0.4))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 60)
+                        } else {
+                            ForEach(currentFolder.notes) { note in
+                                NoteRow(folder: folder, note: note, onDoubleClick: {
+                                    let noteId = NoteIdentifier(folderId: folder.id, noteId: note.id)
+                                    openWindow(id: "note", value: noteId)
+                                })
+                            }
                         }
                     }
-                }
-                .padding(20)
-            }
-            .background(Color.white)
-            
-            Divider()
-            
-            // Add note button
-            HStack {
-                Button(action: { showingNewNoteSheet = true }) {
+                    .padding(20)
+                    
+                    Divider()
+                    
+                    // Add note button
                     HStack {
-                        Image(systemName: "plus.circle.fill")
-                        Text("New Note")
+                        Button(action: { showingNewNoteSheet = true }) {
+                            HStack {
+                                Image(systemName: "plus.circle.fill")
+                                Text("New Note")
+                            }
+                            .font(.system(size: 14))
+                            .foregroundColor(.black)
+                        }
+                        .buttonStyle(.plain)
+                        
+                        Spacer()
                     }
-                    .font(.system(size: 14))
-                    .foregroundColor(.black)
+                    .padding(16)
+                    
+                    Divider()
+                    
+                    // Media section
+                    mediaSection
                 }
-                .buttonStyle(.plain)
-                
-                Spacer()
             }
-            .padding(16)
             .background(Color.white)
         }
         .frame(width: 500, height: 600)
@@ -101,6 +110,100 @@ struct FolderDetailView: View {
     
     private var currentFolder: DailyFolder {
         dataManager.dailyFolders.first(where: { $0.id == folder.id }) ?? folder
+    }
+    
+    // MARK: - Media Section
+    
+    private var mediaSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Media")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.black)
+                
+                Spacer()
+                
+                Text("\(currentFolder.mediaItems.count)/100")
+                    .font(.system(size: 12))
+                    .foregroundColor(.black.opacity(0.5))
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+            
+            // Drag and drop zone
+            ZStack {
+                // Grid of media items
+                if currentFolder.mediaItems.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "photo.on.rectangle.angled")
+                            .font(.system(size: 40))
+                            .foregroundColor(.black.opacity(0.2))
+                        
+                        Text("Drag photos here")
+                            .font(.system(size: 14))
+                            .foregroundColor(.black.opacity(0.4))
+                        
+                        Text("Up to 100 images")
+                            .font(.system(size: 11))
+                            .foregroundColor(.black.opacity(0.3))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 200)
+                } else {
+                    mediaGrid
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .background(isDraggingOver ? Color.blue.opacity(0.1) : Color.black.opacity(0.02))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(
+                        isDraggingOver ? Color.blue.opacity(0.5) : Color.black.opacity(0.1),
+                        style: StrokeStyle(lineWidth: 2, dash: isDraggingOver ? [8, 4] : [])
+                    )
+            )
+            .cornerRadius(8)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 20)
+            .onDrop(of: [.fileURL], isTargeted: $isDraggingOver) { providers in
+                handleDrop(providers: providers)
+                return true
+            }
+        }
+    }
+    
+    private var mediaGrid: some View {
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
+        
+        return LazyVGrid(columns: columns, spacing: 8) {
+            ForEach(currentFolder.mediaItems) { mediaItem in
+                MediaThumbnail(mediaItem: mediaItem, folder: folder)
+            }
+        }
+        .padding(12)
+    }
+    
+    private func handleDrop(providers: [NSItemProvider]) {
+        // Limit to 100 items
+        guard currentFolder.mediaItems.count < 100 else { return }
+        
+        for provider in providers {
+            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { (urlData, error) in
+                DispatchQueue.main.async {
+                    if let urlData = urlData as? Data,
+                       let url = URL(dataRepresentation: urlData, relativeTo: nil),
+                       let imageData = try? Data(contentsOf: url),
+                       let _ = NSImage(data: imageData) {
+                        
+                        // Check limit again before adding
+                        if currentFolder.mediaItems.count < 100 {
+                            let fileName = url.lastPathComponent
+                            dataManager.addMediaToFolder(folder, imageData: imageData, fileName: fileName)
+                        }
+                    }
+                }
+            }
+        }
     }
     
     // MARK: - New Note Sheet
@@ -270,6 +373,113 @@ struct NoteRow: View {
     private func saveTitle() {
         dataManager.updateNote(folder, note: note, title: editedTitle, content: note.content)
         isEditingTitle = false
+    }
+}
+
+// MARK: - Media Thumbnail
+
+struct MediaThumbnail: View {
+    @EnvironmentObject var dataManager: DataManager
+    let mediaItem: MediaItem
+    let folder: DailyFolder
+    @State private var isHovering = false
+    
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            if let image = mediaItem.image {
+                Image(nsImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 105, height: 105)
+                    .clipped()
+                    .cornerRadius(6)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color.black.opacity(0.1), lineWidth: 1)
+                    )
+            } else {
+                Rectangle()
+                    .fill(Color.gray.opacity(0.2))
+                    .frame(width: 105, height: 105)
+                    .cornerRadius(6)
+            }
+            
+            // Delete button on hover
+            if isHovering {
+                Button(action: {
+                    dataManager.deleteMediaFromFolder(folder, media: mediaItem)
+                }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.white)
+                        .background(Circle().fill(Color.red.opacity(0.8)))
+                        .font(.system(size: 20))
+                }
+                .buttonStyle(.plain)
+                .padding(6)
+            }
+        }
+        .onHover { hovering in
+            isHovering = hovering
+        }
+        .onTapGesture {
+            openMediaViewer()
+        }
+        .help("Click to view full size")
+    }
+    
+    private func openMediaViewer() {
+        guard let image = mediaItem.image else { return }
+        
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 600, height: 600),
+            styleMask: [.titled, .closable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        
+        window.title = mediaItem.originalFileName ?? "Image"
+        window.center()
+        window.contentView = NSHostingView(rootView: MediaViewerWindow(mediaItem: mediaItem))
+        window.makeKeyAndOrderFront(nil)
+        window.isReleasedWhenClosed = false
+    }
+}
+
+// MARK: - Media Viewer Window
+
+struct MediaViewerWindow: View {
+    let mediaItem: MediaItem
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        ZStack {
+            Color.white.ignoresSafeArea()
+            
+            if let image = mediaItem.image {
+                Image(nsImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            
+            // Close button
+            VStack {
+                HStack {
+                    Spacer()
+                    Button(action: {
+                        dismiss()
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(.black.opacity(0.6))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(20)
+                }
+                Spacer()
+            }
+        }
+        .frame(minWidth: 400, minHeight: 400)
     }
 }
 
