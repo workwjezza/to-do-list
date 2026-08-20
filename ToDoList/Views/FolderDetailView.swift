@@ -556,28 +556,32 @@ struct MediaViewerWindow: View {
             if let index = mediaItems.firstIndex(where: { $0.id == initialMediaItem.id }) {
                 currentIndex = index
             }
-        }
-        .onKeyPress(.leftArrow) {
-            if currentIndex > 0 {
-                withAnimation {
-                    currentIndex -= 1
+            
+            // Set up keyboard event monitoring
+            NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                switch event.keyCode {
+                case 123: // Left arrow
+                    if currentIndex > 0 {
+                        withAnimation {
+                            currentIndex -= 1
+                        }
+                        return nil
+                    }
+                case 124: // Right arrow
+                    if currentIndex < mediaItems.count - 1 {
+                        withAnimation {
+                            currentIndex += 1
+                        }
+                        return nil
+                    }
+                case 53: // Escape
+                    dismiss()
+                    return nil
+                default:
+                    break
                 }
-                return .handled
+                return event
             }
-            return .ignored
-        }
-        .onKeyPress(.rightArrow) {
-            if currentIndex < mediaItems.count - 1 {
-                withAnimation {
-                    currentIndex += 1
-                }
-                return .handled
-            }
-            return .ignored
-        }
-        .onKeyPress(.escape) {
-            dismiss()
-            return .handled
         }
     }
 }
